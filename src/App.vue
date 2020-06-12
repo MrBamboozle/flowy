@@ -1,17 +1,16 @@
 <template>
   <div id="app">
-    <img alt="Vue logo" src="./assets/logo.png">
-    <HelloWorld msg="Welcome to Your Vue.js + TypeScript App"/>
+    <boquet-maker msg="Welcome to Your Vue.js + TypeScript App"/>
   </div>
 </template>
 
 <script lang="ts">
 import { Component, Vue } from 'vue-property-decorator';
-import HelloWorld from './components/HelloWorld.vue';
+import BoquetMaker from './components/BoquetMaker.vue';
 
 @Component({
   components: {
-    HelloWorld,
+    "boquet-maker": BoquetMaker,
   },
 })
 export default class App extends Vue {}
