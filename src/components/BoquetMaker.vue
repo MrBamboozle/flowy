@@ -13,6 +13,7 @@
         <image v-for="(rose, index) in roses" :href="rose.asset" :key="rose.id" :roseId="rose.id" :width="'64px'" :x="sourceRoseX(index)" class="rose"/>
       </g>
       <rect width="600" height="300" x="150" y="450" stroke="black" stroke-width="1" fill="rgba(0,0,0,0)"></rect>
+      <g class="dropped-roses"></g>
     </svg>
   </div>
 
@@ -36,10 +37,11 @@ interface Rose {
 interface DynamicGrid {
   hexes: Hex[];
   orientation: string;
-
+  ammount: number;
 }
 
 interface Hex {
+  id: number;
   x: number;
   y: number;
   rose: Rose | undefined;
@@ -53,9 +55,11 @@ export default class BoquetMaker extends Vue {
 
 
   private grids: DynamicGrid[] = [
-    {hexes: [], orientation: 'flat'},
-    {hexes: [{x: 0, y: 0, rose: undefined}], orientation: 'flat'},
-    {hexes: [{x: 0, y: 0, rose: undefined}, {x: 1, y: 0, rose: undefined}], orientation: 'pointy'},
+    {hexes: [], orientation: 'flat', ammount: 0},
+    {hexes: [{x: 0, y: 0, rose: undefined, id: 1}], orientation: 'flat', ammount: 1},
+    {hexes: [{x: 0, y: 0, rose: undefined, id: 1}, {x: 1, y: 0, rose: undefined, id: 2}], orientation: 'pointy', ammount: 2},
+    {hexes: [{x: 0, y: 0, rose: undefined, id: 1}, {x: 1, y: 0, rose: undefined, id: 2}, {x: 2, y: 0, rose: undefined, id: 3}], orientation: 'flat', ammount: 3},
+    {hexes: [{x: 1, y: -1, rose: undefined, id: 3}, {x: 0, y: 0, rose: undefined, id: 1}, {x: 1, y: 0, rose: undefined, id: 2}, {x: 2, y: 0, rose: undefined, id: 3}], orientation: 'flat', ammount: 3},
   ] 
 
   private roses: Rose[] = [
@@ -94,7 +98,11 @@ export default class BoquetMaker extends Vue {
         gridElement.rose = this.roses.find((r) => r.id == this.clonedElement.getAttribute("roseId"))
       }
 
-      this.constructGrid()
+      setTimeout(() => {
+        this.destroyClone()
+        const {grid, corners} = this.gridAndCorners
+        this.drawBouquet(grid, corners)
+      }, 1000)
     }
     // const parent = this.clonedElement.parentElement
     // parent.removeChild(this.clonedElement)
@@ -106,6 +114,11 @@ export default class BoquetMaker extends Vue {
     parent.removeChild(this.previewElement)
     this.previewElement = undefined
   }
+  destroyClone() {
+    const parent = this.clonedElement.parentElement
+    parent.removeChild(this.clonedElement)
+    this.clonedElement = undefined
+  }
 
   sourceRoseX(index: number): number {
     const svg = this.$refs["hex-grid"] as HTMLElement
@@ -115,7 +128,7 @@ export default class BoquetMaker extends Vue {
   private roseCounter = 0
 
   @Watch('roseCounter') onRoseCounterChange() {
-    this.constructGrid()
+    // this.constructGrid()
   }
 
   get currentGrid(): DynamicGrid {
@@ -124,7 +137,7 @@ export default class BoquetMaker extends Vue {
 
   get xOffset(): number {
     const svg = this.$refs["hex-grid"] as HTMLElement
-    return (svg.clientWidth / 2)
+    return (svg.clientWidth / 2) - (this.currentGrid.ammount * 15)
   }
 
   get yOffset(): number {
@@ -144,26 +157,33 @@ export default class BoquetMaker extends Vue {
     })
   }
 
+  private mapRosesFromPrevious(hexes: Hex[]): void {
+    hexes.forEach((h) => {
+      const currentHex = this.currentGrid.hexes.find((ch) => ch.id === h.id)
+      if(currentHex)
+        currentHex.rose = h.rose
+    })
+  }
+
   private constructGrid(): void {
     console.log('calling construct')
-    const Hex = Honeycomb.extendHex({ size: 30, orientation: this.currentGrid.orientation})
-    const Grid = Honeycomb.defineGrid(Hex)
-    // get the corners of a hex (they're the same for all hexes created with the same Hex factory)
-    const corners = Hex().corners()
-
-    // const grid = Grid.rectangle({ width: 10, height: 10 })
-    let grid = Grid(this.currentGrid.hexes)
+    
     const svg = d3.select("#hex-grid")
       .attr("width", "100%")
       .attr("height", "100%")
 
-    // svg.selectAll("*").remove()
     svg.selectAll("rect")
       .on("mouseenter", () => {
         if(this.clonedElement) {
+          const previousHexes = this.currentGrid.hexes
+
           this.roseCounter ++
-          
-          grid = Grid(this.currentGrid.hexes)
+
+          this.mapRosesFromPrevious(previousHexes)
+
+          const {grid, corners} = this.gridAndCorners
+    
+          this.drawBouquet(grid, corners)
           const gridElement = grid.find((h) => h.rose === undefined)
           const { x, y } = gridElement.toPoint()
 
@@ -186,9 +206,24 @@ export default class BoquetMaker extends Vue {
         }
       })
 
+  }
+
+  get gridAndCorners() {
+    const Hex = Honeycomb.extendHex({ size: 30, orientation: this.currentGrid.orientation})
+    const Grid = Honeycomb.defineGrid(Hex)
+    const corners = Hex().corners()
+
+    const grid = Grid(this.currentGrid.hexes, this.currentGrid.orientation)
+
+    return {grid, corners}
+  }
+
+  private drawBouquet(grid: Honeycomb.Grid, corners: Honeycomb.Point[]) {
+    const svg = d3.select("#hex-grid")
+
     svg.selectAll("polygon").remove()
     svg.selectAll("text").remove()
-    console.log('clearing rect', svg.select("rect"))
+    svg.selectAll(".dropped-rose").remove()
 
 
     svg.selectAll("text")
@@ -213,13 +248,18 @@ export default class BoquetMaker extends Vue {
       .attr("stroke-width", d => 1)
       .filter((d) => d.rose !== undefined)
 
-    svg.selectAll("image")  
+    console.log("grid before iamge append", JSON.stringify(grid), svg.select(".dropped-roses").selectAll("image"))
+    svg.select(".dropped-roses").selectAll("image")  
       .data(grid as any[])
-      .enter().append("image")
+      .enter()
+        .filter(d => {
+          console.log(JSON.stringify(grid), d)
+          return !!d.rose
+        }).append("image")
       .attr("href", d => d.rose.asset)
       .attr("roseId", d => d.rose.id)
       .attr("width", d => "64px")
-      .attr("class", d => "rose")
+      .attr("class", d => "dropped-rose rose")
       .attr("transform", d => {
         const { x, y } = d.toPoint()
         return "translate(" + (x+this.xOffset) + "," + (y+this.yOffset) + ")"
