@@ -10,9 +10,9 @@
   <div class="grid">
     <svg id="hex-grid" ref="hex-grid">
       <g class="available-roses">
-        <image v-for="(rose, index) in roses" :href="rose.asset" :key="rose.id" :roseId="rose.id" :width="'64px'" :x="sourceRoseX(index)" class="rose"/>
+        <image v-for="(rose, index) in roses" :href="rose.asset" :key="rose.id" :roseId="rose.id" :width="'64px'" :x="sourceRoseX(index)" class="initial-rose"/>
       </g>
-      <rect width="600" height="300" x="150" y="450" stroke="black" stroke-width="1" fill="rgba(0,0,0,0)"></rect>
+      <rect class="dropzone" width="600" height="300" x="150" y="450" stroke="black" stroke-width="1" fill="rgba(0,0,0,0)"></rect>
       <g class="dropped-roses"></g>
     </svg>
   </div>
@@ -28,6 +28,7 @@ import * as Honeycomb from 'honeycomb-grid'
 import * as d3 from "d3"
 import gsap from 'gsap'
 import {Draggable, TweenLite} from "gsap/all";
+import * as _ from "lodash"
 
 interface Rose {
   asset: string;
@@ -50,8 +51,40 @@ interface Hex {
 @Component({})
 export default class BoquetMaker extends Vue {
 
-  clonedElement: any 
+  draggedRose: any 
   previewElement: any
+
+  dragging = false
+  insideDropzone = false
+
+  dropX: any
+  dropY: any
+
+  private roseCounter = 0
+
+  get currentGrid(): DynamicGrid {
+    return this.grids[this.roseCounter]
+  }
+
+  get xOffset(): number {
+    const svg = this.$refs["hex-grid"] as HTMLElement
+    return (svg.clientWidth / 2) - (this.currentGrid.ammount * 15)
+  }
+
+  get yOffset(): number {
+    return 600
+  }
+
+  get gridAndCorners() {
+    const Hex = Honeycomb.extendHex({ size: 30, orientation: this.currentGrid.orientation})
+    const Grid = Honeycomb.defineGrid(Hex)
+    const corners = Hex().corners()
+
+    const grid = Grid(this.currentGrid.hexes, this.currentGrid.orientation)
+
+    return {grid, corners}
+  }
+
 
 
   private grids: DynamicGrid[] = [
@@ -68,96 +101,84 @@ export default class BoquetMaker extends Vue {
     { asset: require("../assets/rose-3.png"), id: 3}
   ]
 
-  cloneRose(el: any) {
-    const parent = el.srcElement.parentElement
-    const newElement = el.srcElement.cloneNode()
-
-    this.clonedElement = el.srcElement
-
-    el.srcElement.setAttribute("opacity", "0.5")
-
-    parent.prepend(newElement);
-
-    Draggable.create(newElement, {
-      type:"x,y",
-      bounds:"#hex-grid",
-      onPress: this.cloneRose,
-      onRelease: this.appendRoseToGrid
-    });
-  }
-
-  appendRoseToGrid(el: any) {
-    if(this.previewElement) {
-      TweenLite.to(this.clonedElement, 1, 
-        { duration: 0.6, opacity: 1, x: this.previewElement.getAttribute("x") - this.clonedElement.getAttribute("x"), y: this.previewElement.getAttribute("y") }
-        );
-      this.destroyPreview()
-
-      const gridElement = this.currentGrid.hexes.find((h) => h.rose === undefined)
-      if(gridElement) {
-        gridElement.rose = this.roses.find((r) => r.id == this.clonedElement.getAttribute("roseId"))
-      }
-
-      setTimeout(() => {
-        this.destroyClone()
-        const {grid, corners} = this.gridAndCorners
-        this.drawBouquet(grid, corners)
-      }, 1000)
-    }
-    // const parent = this.clonedElement.parentElement
-    // parent.removeChild(this.clonedElement)
-    // this.clonedElement = undefined
-  }
-
-  destroyPreview() {
-    const parent = this.previewElement.parentElement
-    parent.removeChild(this.previewElement)
-    this.previewElement = undefined
-  }
-  destroyClone() {
-    const parent = this.clonedElement.parentElement
-    parent.removeChild(this.clonedElement)
-    this.clonedElement = undefined
-  }
-
-  sourceRoseX(index: number): number {
-    const svg = this.$refs["hex-grid"] as HTMLElement
-    return index * (svg ? svg.clientWidth : 900) / this.roses.length + 20
-  }
-
-  private roseCounter = 0
-
-  @Watch('roseCounter') onRoseCounterChange() {
-    // this.constructGrid()
-  }
-
-  get currentGrid(): DynamicGrid {
-    return this.grids[this.roseCounter]
-  }
-
-  get xOffset(): number {
-    const svg = this.$refs["hex-grid"] as HTMLElement
-    return (svg.clientWidth / 2) - (this.currentGrid.ammount * 15)
-  }
-
-  get yOffset(): number {
-    return 600
-  }
-  
   mounted() {
     gsap.registerPlugin(Draggable)
     // this.appendAvailableRoses()
-    this.constructGrid()
+    this.createDropzone()
     
-    Draggable.create(".rose", {
+    Draggable.create(".initial-rose", {
       type:"x,y",
       bounds:"#hex-grid",
-      onPress: this.cloneRose,
-      onRelease: this.appendRoseToGrid
+      onPress: this.onDragInitialRose,
+      onDragEnd: this.onDropInitialRose,
+      onDrag: this.testRectOverlap
     })
   }
 
+  testRectOverlap(el) {
+    if(Draggable.hitTest(this.draggedRose, '.dropzone', 50)) {
+      if(!this.insideDropzone) {
+        this.insideDropzone = true
+        this.addHex()
+
+        const {grid, corners} = this.gridAndCorners
+  
+        this.drawBouquet(grid, corners)
+
+        const gridElement = grid.find((h) => h.rose === undefined)
+        const { x, y } = gridElement.toPoint()
+
+        this.dropX = x + this.xOffset
+        this.dropY = y + this.yOffset
+        this.appendPreviewToGrid(this.draggedRose, grid, this.dropX, this.dropY)
+      } 
+    } else {
+      if(this.insideDropzone) {
+        this.insideDropzone = false
+
+        this.removeHex()
+
+        const {grid, corners} = this.gridAndCorners
+  
+        this.drawBouquet(grid, corners)
+
+        this.destroyPreview()
+      }
+    }
+  }
+
+  private createDropzone(): void {
+    
+    const svg = d3.select("#hex-grid")
+      .attr("width", "100%")
+      .attr("height", "100%")
+
+    // svg.selectAll(".dropzone")
+    //   .on("mouseleave", () => {
+    //     this.insideDropzone = false
+    //   })
+  }
+
+  addHex() {
+    const previousHexes = [...this.currentGrid.hexes]
+    this.roseCounter ++
+    this.mapRosesFromPrevious(previousHexes)
+  }
+
+  removeHex() {
+    const previousHexes = [...this.currentGrid.hexes]
+    this.roseCounter --
+    this.remapRoses(previousHexes)
+
+  }
+
+  private remapRoses(prevHexes: Hex[]) {
+    const roses = prevHexes.filter((h) => !!h.rose).map((h) => h.rose)
+    this.currentGrid.hexes.forEach((h, index) => {h.rose = roses[index]})
+  }
+
   private mapRosesFromPrevious(hexes: Hex[]): void {
+    console.log('current', JSON.stringify(this.currentGrid.hexes))
     hexes.forEach((h) => {
       const currentHex = this.currentGrid.hexes.find((ch) => ch.id === h.id)
       if(currentHex)
@@ -165,58 +186,99 @@ export default class BoquetMaker extends Vue {
     })
   }
 
-  private constructGrid(): void {
-    console.log('calling construct')
-    
-    const svg = d3.select("#hex-grid")
-      .attr("width", "100%")
-      .attr("height", "100%")
+  private appendPreviewToGrid(el, grid, x, y) {
+    const parent = el.parentElement
+    const previewRose = el.cloneNode()
 
-    svg.selectAll("rect")
-      .on("mouseenter", () => {
-        if(this.clonedElement) {
-          const previousHexes = this.currentGrid.hexes
+    previewRose.setAttribute("x", x)
+    previewRose.setAttribute("y", y)
+    previewRose.setAttribute("transform", "")
+    previewRose.setAttribute("class", "preview-rose")
+    previewRose.setAttribute("opacity", "0.5")
 
-          this.roseCounter ++
-
-          this.mapRosesFromPrevious(previousHexes)
-
-          const {grid, corners} = this.gridAndCorners
-    
-          this.drawBouquet(grid, corners)
-          const gridElement = grid.find((h) => h.rose === undefined)
-          const { x, y } = gridElement.toPoint()
-
-          const parent = this.clonedElement.parentElement
-          this.previewElement = this.clonedElement.cloneNode()
-
-          this.previewElement.setAttribute("x", x+this.xOffset)
-          this.previewElement.setAttribute("y", y+this.yOffset)
-          this.previewElement.setAttribute("transform", "")
-
-          parent.append(this.previewElement);
-
-        }
-      })
-      .on("mouseleave", () => {
-        if(this.previewElement) {
-          this.roseCounter --
-
-          this.destroyPreview()
-        }
-      })
-
+    parent.append(previewRose);
   }
 
-  get gridAndCorners() {
-    const Hex = Honeycomb.extendHex({ size: 30, orientation: this.currentGrid.orientation})
-    const Grid = Honeycomb.defineGrid(Hex)
-    const corners = Hex().corners()
-
-    const grid = Grid(this.currentGrid.hexes, this.currentGrid.orientation)
-
-    return {grid, corners}
+  destroyPreview() {
+    const previewElements = document.getElementsByClassName('preview-rose');
+    while(previewElements.length > 0){
+        previewElements[0].parentNode.removeChild(previewElements[0]);
+    }
   }
+
+  destroyElement(el) {
+    const parent = el.parentElement
+    parent.removeChild(el)
+  }
+
+  private onDragInitialRose(el) {
+    this.dragging = true
+    this.draggedRose = el.srcElement
+
+    const clonedRose = this.cloneRose(el.srcElement)
+    this.initDrag(clonedRose, this.onDragInitialRose, this.onDropInitialRose)
+    this.transformToDragged(el.srcElement)
+  }
+  
+  private cloneRose(el: any) {
+    const parent = el.parentElement
+    const newElement = el.cloneNode()
+
+    parent.prepend(newElement)
+
+    return newElement
+  }
+
+  private transformToDragged(el) {
+    el.setAttribute("class", "dragged-rose")
+    el.setAttribute("opacity", "0.5")
+  }
+
+  private initDrag(el, onPress, onDragEnd) {
+    Draggable.create(el, {
+      type:"x,y",
+      bounds:"#hex-grid",
+      onPress: onPress,
+      onDragEnd: onDragEnd,
+      onDrag: this.testRectOverlap
+    })
+  }
+
+  onDropInitialRose(el: any) {
+    this.dragging = false
+    if(this.insideDropzone) {
+      TweenLite.to(this.draggedRose, 1, 
+        { duration: 0.6, opacity: 1, x: this.dropX - this.draggedRose.getAttribute("x"), y: this.dropY}
+        );
+      this.destroyPreview()
+
+      const gridElement = this.currentGrid.hexes.find((h) => h.rose === undefined)
+      if(gridElement) {
+        gridElement.rose = this.roses.find((r) => r.id == this.draggedRose.getAttribute("roseId"))
+      }
+
+      setTimeout(() => {
+        this.destroyElement(this.draggedRose)
+        const {grid, corners} = this.gridAndCorners
+        this.drawBouquet(grid, corners)
+      }, 1000)
+    } else {
+      this.destroyElement(this.draggedRose)
+    }
+    this.insideDropzone = false
+  }
+
+  sourceRoseX(index: number): number {
+    const svg = this.$refs["hex-grid"] as HTMLElement
+    return index * (svg ? svg.clientWidth : 900) / this.roses.length + 20
+  }
+
+
+  @Watch('roseCounter') onRoseCounterChange() {
+    // this.constructGrid()
+  }
+
+  
 
   private drawBouquet(grid: Honeycomb.Grid, corners: Honeycomb.Point[]) {
     const svg = d3.select("#hex-grid")
@@ -248,12 +310,17 @@ export default class BoquetMaker extends Vue {
       .attr("stroke-width", d => 1)
       .filter((d) => d.rose !== undefined)
 
-    console.log("grid before iamge append", JSON.stringify(grid), svg.select(".dropped-roses").selectAll("image"))
-    svg.select(".dropped-roses").selectAll("image")  
+      console.log('dropped roses', svg.select(".dropped-roses").selectAll("image")  
       .data(grid as any[])
       .enter()
         .filter(d => {
-          console.log(JSON.stringify(grid), d)
+          return !!d.rose
+        }), grid)
+
+    svg.select(".dropped-roses").selectAll(".dropped-rose")  
+      .data(grid as any[])
+      .enter()
+        .filter(d => {
           return !!d.rose
         }).append("image")
       .attr("href", d => d.rose.asset)
@@ -264,7 +331,42 @@ export default class BoquetMaker extends Vue {
         const { x, y } = d.toPoint()
         return "translate(" + (x+this.xOffset) + "," + (y+this.yOffset) + ")"
       })
+
+      Draggable.create(".dropped-rose", {
+        type:"x,y",
+        bounds:"#hex-grid",
+        onPress: this.onDragDroppedRose,
+        onDragEnd: this.onDropInitialRose,
+        onDrag: this.testRectOverlap,
+      })
   }
+
+  private onDragDroppedRose(el) {
+    console.log('yo')
+    this.insideDropzone = true
+    this.dragging = true
+    this.draggedRose = el.srcElement
+    this.transformToDragged(el.srcElement)
+    const roseHex = this.currentGrid.hexes.find((h) => !h.rose || h.rose.id == el.srcElement.getAttribute("roseId"))
+    if (roseHex)
+      roseHex.rose = undefined
+
+    const {grid, corners} = this.gridAndCorners
+
+    const gridElement = grid.find((h) => h.rose === undefined)
+    const { x, y } = gridElement.toPoint()
+
+    this.dropX = x + this.xOffset
+    this.dropY = y + this.yOffset
+    this.appendPreviewToGrid(this.draggedRose, grid, this.dropX, this.dropY)
+  }
+
+  onMoveDroppedRose(el) {
+    if(Draggable.hitTest(this.draggedRose, '.dropzone', 2)) {
+      console.log('overlap')
+    }
+  }
+
 }
 </script>
 
