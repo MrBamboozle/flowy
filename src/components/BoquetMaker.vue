@@ -9,10 +9,10 @@
     <button @click="removeRose">Remove</button> -->
   <div class="grid">
     <svg id="hex-grid" ref="hex-grid">
+      <rect class="dropzone" width="600" height="300" x="150" y="450" stroke="#809393" stroke-width="2" stroke-dasharray="20 10" fill="rgba(81,194,194,1)"></rect>
       <g class="available-roses">
-        <image v-for="(rose, index) in roses" :href="rose.asset" :key="rose.id" :roseId="rose.id" :width="'64px'" :x="sourceRoseX(index)" class="initial-rose"/>
+        <image v-for="(rose, index) in roses" :href="rose.asset" :key="rose.id" :roseId="rose.id" :width="'60px'" :x="sourceRoseX(index)" class="initial-rose"/>
       </g>
-      <rect class="dropzone" width="600" height="300" x="150" y="450" stroke="black" stroke-width="1" fill="rgba(0,0,0,0)"></rect>
       <g class="dropped-roses"></g>
     </svg>
   </div>
@@ -35,17 +35,27 @@ interface Rose {
   id: number;
 }
 
-interface DynamicGrid {
-  hexes: Hex[];
-  orientation: string;
-  ammount: number;
+class DynamicGrid {
+  constructor(
+    public hexes: Hex[],
+    public readonly orientation: string,
+    public readonly horizontalAmount: number,
+  ) {}
+
 }
 
-interface Hex {
-  id: number;
-  x: number;
-  y: number;
-  rose: Rose | undefined;
+class Hex {
+  constructor(
+    public readonly x: number,
+    public readonly y: number,
+    public readonly id: number,
+    public rose?: Rose
+  ) {}
+}
+
+enum GridType {
+  FLAT = 'flat',
+  POINTY = 'pointy'
 }
 
 @Component({})
@@ -68,7 +78,44 @@ export default class BoquetMaker extends Vue {
 
   get xOffset(): number {
     const svg = this.$refs["hex-grid"] as HTMLElement
-    return (svg.clientWidth / 2) - (this.currentGrid.ammount * 15)
+    
+    return (svg.clientWidth / 2) - this.hexPileCenterX
+  }
+
+  get hexPileCenterX() {
+    const Hex = Honeycomb.extendHex({size: 30, orientation: this.currentGrid.orientation})
+    const width = Hex().width()
+
+    //30 here is hex size
+    const a = (30 * Math.sin(this.degreesToRadians(30))) / Math.sin(this.degreesToRadians(90))
+    const flatWidth = a + 30
+
+    const calculationWidth = this.currentGrid.orientation === GridType.FLAT ?
+      flatWidth / 2 :
+      width / 2
+
+    return (this.currentGrid.horizontalAmount * calculationWidth)
+  }
+
+  private degreesToRadians(degrees: number) {
+    const pi = Math.PI;
+    return degrees * (pi/180);
+  }
+
+  calculateOffsetFromCenter(x: number): number {
+    const Hex = Honeycomb.extendHex({size: 30, orientation: this.currentGrid.orientation})
+    const width = Hex().width()
+
+    //30 here is hex size
+    const a = (30 * Math.sin(this.degreesToRadians(30))) / Math.sin(this.degreesToRadians(90))
+    const flatWidth = a + 30
+
+    const calculationWidth = this.currentGrid.orientation === GridType.FLAT ?
+      flatWidth / 2 :
+      width / 2
+
+    const adjustedX = x + calculationWidth
+    return adjustedX - this.hexPileCenterX
   }
 
   get yOffset(): number {
@@ -88,17 +135,156 @@ export default class BoquetMaker extends Vue {
 
 
   private grids: DynamicGrid[] = [
-    {hexes: [], orientation: 'flat', ammount: 0},
-    {hexes: [{x: 0, y: 0, rose: undefined, id: 1}], orientation: 'flat', ammount: 1},
-    {hexes: [{x: 0, y: 0, rose: undefined, id: 1}, {x: 1, y: 0, rose: undefined, id: 2}], orientation: 'pointy', ammount: 2},
-    {hexes: [{x: 0, y: 0, rose: undefined, id: 1}, {x: 1, y: 0, rose: undefined, id: 2}, {x: 2, y: 0, rose: undefined, id: 3}], orientation: 'flat', ammount: 3},
-    {hexes: [{x: 1, y: -1, rose: undefined, id: 3}, {x: 0, y: 0, rose: undefined, id: 1}, {x: 1, y: 0, rose: undefined, id: 2}, {x: 2, y: 0, rose: undefined, id: 3}], orientation: 'flat', ammount: 3},
+    new DynamicGrid(
+      [],
+      GridType.FLAT,
+      0
+    ),
+    new DynamicGrid(
+      [
+        new Hex(0, 0, 1)
+      ],
+      GridType.FLAT,
+      1
+    ),
+    new DynamicGrid(
+      [
+        new Hex(0, 0, 1),
+        new Hex(1, 0, 2),
+      ],
+      GridType.POINTY,
+      2
+    ),
+    new DynamicGrid(
+      [
+        new Hex(0, 0, 1),
+        new Hex(1, 0, 2),
+        new Hex(2, 0, 3),
+      ],
+      GridType.FLAT,
+      3
+    ),
+    new DynamicGrid(
+      [
+        new Hex(1, -1, 4),
+        new Hex(0, 0, 1),
+        new Hex(1, 0, 2),
+        new Hex(2, 0, 3),
+      ],
+      GridType.FLAT,
+      3
+    ),
+    new DynamicGrid(
+      [
+        new Hex(0, 0, 1),
+        new Hex(1, 0, 2),
+        new Hex(2, 0, 3),
+        new Hex(0, 1, 4),
+        new Hex(2, 1, 5),
+      ],
+      GridType.FLAT,
+      3
+    ),
+    new DynamicGrid(
+      [
+        new Hex(1, 0, 6),
+        new Hex(0, 1, 4),
+        new Hex(1, 1, 5),
+        new Hex(0, 2, 1),
+        new Hex(1, 2, 2),
+        new Hex(2, 2, 3),
+      ],
+      GridType.POINTY,
+      3
+    ),
+    new DynamicGrid(
+      [
+        new Hex(1, -1, 4),
+        new Hex(0, 0, 1),
+        new Hex(1, 0, 2),
+        new Hex(2, 0, 3),
+        new Hex(0, 1, 5),
+        new Hex(2, 1, 6),
+        new Hex(1, 1, 7),
+      ],
+      GridType.FLAT,
+      3
+    ),
+    // new DynamicGrid(
+    //   [],
+    //   GridType.FLAT,
+    //   0
+    // ),
+    // new DynamicGrid(
+    //   [],
+    //   GridType.FLAT,
+    //   0
+    // ),
+    // new DynamicGrid(
+    //   [],
+    //   GridType.FLAT,
+    //   0
+    // ),
+    // new DynamicGrid(
+    //   [],
+    //   GridType.FLAT,
+    //   0
+    // ),
+    // new DynamicGrid(
+    //   [],
+    //   GridType.FLAT,
+    //   0
+    // ),
+    // new DynamicGrid(
+    //   [],
+    //   GridType.FLAT,
+    //   0
+    // ),
+    // new DynamicGrid(
+    //   [],
+    //   GridType.FLAT,
+    //   0
+    // ),
+    // new DynamicGrid(
+    //   [],
+    //   GridType.FLAT,
+    //   0
+    // ),
+    // new DynamicGrid(
+    //   [],
+    //   GridType.FLAT,
+    //   0
+    // ),
+    // new DynamicGrid(
+    //   [],
+    //   GridType.FLAT,
+    //   0
+    // ),
+    // new DynamicGrid(
+    //   [],
+    //   GridType.FLAT,
+    //   0
+    // ),
+    // new DynamicGrid(
+    //   [],
+    //   GridType.FLAT,
+    //   0
+    // ),
+
+    // {hexes: [], orientation: GridType.FLAT, horizontalAmount: 0},
+    // {hexes: [{x: 0, y: 0, rose: undefined, id: 1}], orientation: GridType.FLAT, horizontalAmount: 1},
+    // {hexes: [{x: 0, y: 0, rose: undefined, id: 1}, {x: 1, y: 0, rose: undefined, id: 2}], orientation: GridType.POINTY, horizontalAmount: 2},
+    // {hexes: [{x: 0, y: 0, rose: undefined, id: 1}, {x: 1, y: 0, rose: undefined, id: 2}, {x: 2, y: 0, rose: undefined, id: 3}], orientation: GridType.FLAT, horizontalAmount: 3},
+    // {hexes: [{x: 1, y: -1, rose: undefined, id: 4}, {x: 0, y: 0, rose: undefined, id: 1}, {x: 1, y: 0, rose: undefined, id: 2}, {x: 2, y: 0, rose: undefined, id: 3}], orientation: GridType.FLAT, horizontalAmount: 3},
   ] 
 
   private roses: Rose[] = [
-    { asset: require("../assets/rose-1.png"), id: 1},
-    { asset: require("../assets/rose-2.png"), id: 2},
-    { asset: require("../assets/rose-3.png"), id: 3}
+    // { asset: require("../assets/rose-1.png"), id: 1},
+    // { asset: require("../assets/rose-2.png"), id: 2},
+    // { asset: require("../assets/rose-3.png"), id: 3},
+    { asset: require("../assets/asset-1-cropped.png"), id: 1},
+    { asset: require("../assets/asset-2-cropped.png"), id: 2},
+    { asset: require("../assets/asset-3-cropped.png"), id: 3}
   ]
 
   mounted() {
@@ -115,7 +301,7 @@ export default class BoquetMaker extends Vue {
     })
   }
 
-  testRectOverlap(el) {
+  testRectOverlap() {
     if(Draggable.hitTest(this.draggedRose, '.dropzone', 50)) {
       if(!this.insideDropzone) {
         this.insideDropzone = true
@@ -125,7 +311,7 @@ export default class BoquetMaker extends Vue {
   
         this.drawBouquet(grid, corners)
 
-        const gridElement = grid.find((h) => h.rose === undefined)
+        const gridElement = grid.find((h: Hex) => h.rose === undefined)
         const { x, y } = gridElement.toPoint()
 
         this.dropX = x + this.xOffset
@@ -160,13 +346,16 @@ export default class BoquetMaker extends Vue {
   }
 
   addHex() {
-    const previousHexes = [...this.currentGrid.hexes]
+    const previousHexes = [...this.currentGrid.hexes.map((h) => Object.assign({}, h))]
+    console.log('previousHexes', JSON.stringify(previousHexes))
+    this.currentGrid.hexes.forEach((h) => {h.rose = undefined})
     this.roseCounter ++
     this.mapRosesFromPrevious(previousHexes)
   }
 
   removeHex() {
-    const previousHexes = [...this.currentGrid.hexes]
+    const previousHexes = [...this.currentGrid.hexes.map((h) => Object.assign({}, h))]
+    this.currentGrid.hexes.forEach((h) => {h.rose = undefined})
     this.roseCounter --
     this.remapRoses(previousHexes)
 
@@ -178,7 +367,7 @@ export default class BoquetMaker extends Vue {
   }
 
   private mapRosesFromPrevious(hexes: Hex[]): void {
-    console.log('current', JSON.stringify(this.currentGrid.hexes))
+    console.log('current', JSON.stringify(hexes))
     hexes.forEach((h) => {
       const currentHex = this.currentGrid.hexes.find((ch) => ch.id === h.id)
       if(currentHex)
@@ -187,6 +376,7 @@ export default class BoquetMaker extends Vue {
   }
 
   private appendPreviewToGrid(el, grid, x, y) {
+    console.log('append Y', y)
     const parent = el.parentElement
     const previewRose = el.cloneNode()
 
@@ -202,7 +392,7 @@ export default class BoquetMaker extends Vue {
   destroyPreview() {
     const previewElements = document.getElementsByClassName('preview-rose');
     while(previewElements.length > 0){
-        previewElements[0].parentNode.removeChild(previewElements[0]);
+        previewElements[0].parentNode.removeChild(previewElements[0])
     }
   }
 
@@ -247,8 +437,8 @@ export default class BoquetMaker extends Vue {
   onDropInitialRose(el: any) {
     this.dragging = false
     if(this.insideDropzone) {
-      TweenLite.to(this.draggedRose, 1, 
-        { duration: 0.6, opacity: 1, x: this.dropX - this.draggedRose.getAttribute("x"), y: this.dropY}
+      TweenLite.to(this.draggedRose, 0.5, 
+        { duration: 0.5, opacity: 1, x: this.dropX - this.draggedRose.getAttribute("x"), y: this.dropY}
         );
       this.destroyPreview()
 
@@ -261,7 +451,7 @@ export default class BoquetMaker extends Vue {
         this.destroyElement(this.draggedRose)
         const {grid, corners} = this.gridAndCorners
         this.drawBouquet(grid, corners)
-      }, 1000)
+      }, 500)
     } else {
       this.destroyElement(this.draggedRose)
     }
@@ -329,7 +519,8 @@ export default class BoquetMaker extends Vue {
       .attr("class", d => "dropped-rose rose")
       .attr("transform", d => {
         const { x, y } = d.toPoint()
-        return "translate(" + (x+this.xOffset) + "," + (y+this.yOffset) + ")"
+        console.log('offset from center', this.calculateOffsetFromCenter(x))
+        return "translate(" + (x+this.xOffset) + "," + (y+this.yOffset) + ") rotate(" + this.calculateOffsetFromCenter(x)/4 + ",32,32)"
       })
 
       Draggable.create(".dropped-rose", {
@@ -353,7 +544,7 @@ export default class BoquetMaker extends Vue {
 
     const {grid, corners} = this.gridAndCorners
 
-    const gridElement = grid.find((h) => h.rose === undefined)
+    const gridElement = grid.find((h: Hex) => h.rose === undefined)
     const { x, y } = gridElement.toPoint()
 
     this.dropX = x + this.xOffset
@@ -388,7 +579,7 @@ export default class BoquetMaker extends Vue {
 
   .grid{
     justify-content: center;
-    height:900px;
+    height:1500px;
   }
 }
 </style>
