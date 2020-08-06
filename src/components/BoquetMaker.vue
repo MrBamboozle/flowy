@@ -9,20 +9,20 @@
     <button @click="removeRose">Remove</button> -->
   <div class="grid">
     <svg id="hex-grid" ref="hex-grid">
-      <rect class="dropzone" width="600" height="300" x="150" y="450" stroke="#809393" stroke-width="2" stroke-dasharray="20 10" fill="rgba(81,194,194,1)"></rect>
-      <g class="available-roses">
-        <image v-for="(rose, index) in roses" :href="rose.asset" :key="rose.id" :roseId="rose.id" :width="'60px'" :x="sourceRoseX(index)" class="initial-rose"/>
-      </g>
+      <rect class="dropzone" width="600" height="300" x="150" y="300" stroke="#809393" stroke-width="3" stroke-dasharray="20 10" fill="rgba(81,194,194,0.3)"></rect>
+      <image :href="wrapBackgroundAsset" :width="'220px'" x="350" y="450" class="wrap-background"/>
       <g class="dropped-roses"></g>
+      <g class="available-roses" x="150">
+        <image v-for="(rose, index) in roses" :href="rose.asset" :key="rose.id" :roseId="rose.id" :width="'80px'" :x="sourceRoseX(index)" class="initial-rose"/>
+      </g>
+      <image :href="wrapForegroundAsset" :width="'220px'" x="350" y="580" class="wrap-foreground"/>
     </svg>
   </div>
-
-  {{roseCounter}}
-  {{grids[roseCounter]}}
 </div>
 </template>
 
 <script lang="ts">
+/* eslint-disable */
 import { Component, Prop, Vue, Watch } from 'vue-property-decorator';
 import * as Honeycomb from 'honeycomb-grid'
 import * as d3 from "d3"
@@ -49,6 +49,7 @@ class Hex {
     public readonly x: number,
     public readonly y: number,
     public readonly id: number,
+    public readonly order: number,
     public rose?: Rose
   ) {}
 }
@@ -119,7 +120,7 @@ export default class BoquetMaker extends Vue {
   }
 
   get yOffset(): number {
-    return 600
+    return 450
   }
 
   get gridAndCorners() {
@@ -127,7 +128,7 @@ export default class BoquetMaker extends Vue {
     const Grid = Honeycomb.defineGrid(Hex)
     const corners = Hex().corners()
 
-    const grid = Grid(this.currentGrid.hexes, this.currentGrid.orientation)
+    const grid = (Grid as any)(this.currentGrid.hexes, this.currentGrid.orientation) // eslint-disable-line no-use-before-define
 
     return {grid, corners}
   }
@@ -142,70 +143,70 @@ export default class BoquetMaker extends Vue {
     ),
     new DynamicGrid(
       [
-        new Hex(0, 0, 1)
+        new Hex(0, 0, 1, 0)
       ],
       GridType.FLAT,
       1
     ),
     new DynamicGrid(
       [
-        new Hex(0, 0, 1),
-        new Hex(1, 0, 2),
+        new Hex(0, 0, 1, 0),
+        new Hex(1, 0, 2, 1),
       ],
       GridType.POINTY,
       2
     ),
     new DynamicGrid(
       [
-        new Hex(0, 0, 1),
-        new Hex(1, 0, 2),
-        new Hex(2, 0, 3),
+        new Hex(0, 0, 1, 0),
+        new Hex(1, 0, 2, 2),
+        new Hex(2, 0, 3, 1),
       ],
       GridType.FLAT,
       3
     ),
     new DynamicGrid(
       [
-        new Hex(1, -1, 4),
-        new Hex(0, 0, 1),
-        new Hex(1, 0, 2),
-        new Hex(2, 0, 3),
+        new Hex(1, -1, 4, 1),
+        new Hex(0, 0, 1, 0),
+        new Hex(1, 0, 2, 2),
+        new Hex(2, 0, 3, 3),
       ],
       GridType.FLAT,
       3
     ),
     new DynamicGrid(
       [
-        new Hex(0, 0, 1),
-        new Hex(1, 0, 2),
-        new Hex(2, 0, 3),
-        new Hex(0, 1, 4),
-        new Hex(2, 1, 5),
+        new Hex(0, 0, 1, 0),
+        new Hex(1, 0, 2, 2),
+        new Hex(2, 0, 3, 3),
+        new Hex(0, 1, 4, 1),
+        new Hex(2, 1, 5, 4),
       ],
       GridType.FLAT,
       3
     ),
     new DynamicGrid(
       [
-        new Hex(1, 0, 6),
-        new Hex(0, 1, 4),
-        new Hex(1, 1, 5),
-        new Hex(0, 2, 1),
-        new Hex(1, 2, 2),
-        new Hex(2, 2, 3),
+        new Hex(1, 0, 6, 2),
+        new Hex(0, 1, 4, 0),
+        new Hex(1, 1, 5, 3),
+        new Hex(0, 2, 1, 1),
+        new Hex(1, 2, 2, 4),
+        new Hex(2, 2, 3, 5),
       ],
       GridType.POINTY,
       3
     ),
     new DynamicGrid(
       [
-        new Hex(1, -1, 4),
-        new Hex(0, 0, 1),
-        new Hex(1, 0, 2),
-        new Hex(2, 0, 3),
-        new Hex(0, 1, 5),
-        new Hex(2, 1, 6),
-        new Hex(1, 1, 7),
+        new Hex(1, -1, 4, 2),
+        new Hex(0, 0, 1, 0),
+        new Hex(1, 0, 2, 3),
+        new Hex(2, 0, 3, 5),
+        new Hex(0, 1, 5, 1),
+        new Hex(2, 1, 6, 6),
+        new Hex(1, 1, 7, 4),
       ],
       GridType.FLAT,
       3
@@ -282,10 +283,18 @@ export default class BoquetMaker extends Vue {
     // { asset: require("../assets/rose-1.png"), id: 1},
     // { asset: require("../assets/rose-2.png"), id: 2},
     // { asset: require("../assets/rose-3.png"), id: 3},
-    { asset: require("../assets/asset-1-cropped.png"), id: 1},
-    { asset: require("../assets/asset-2-cropped.png"), id: 2},
-    { asset: require("../assets/asset-3-cropped.png"), id: 3}
+    { asset: require("../assets/rose-1-cropped.png"), id: 1},
+    { asset: require("../assets/rose-2-cropped.png"), id: 2},
+    { asset: require("../assets/rose-3-cropped.png"), id: 3},
   ]
+
+  get wrapBackgroundAsset(): any {
+    return require("../assets/full-wrap-background.png")
+  }
+
+  get wrapForegroundAsset(): any {
+    return require("../assets/full-wrap-front.png")
+  }
 
   mounted() {
     gsap.registerPlugin(Draggable)
@@ -375,7 +384,7 @@ export default class BoquetMaker extends Vue {
     })
   }
 
-  private appendPreviewToGrid(el, grid, x, y) {
+  private appendPreviewToGrid(el: any, grid: any, x: any, y: any) {
     console.log('append Y', y)
     const parent = el.parentElement
     const previewRose = el.cloneNode()
@@ -392,16 +401,17 @@ export default class BoquetMaker extends Vue {
   destroyPreview() {
     const previewElements = document.getElementsByClassName('preview-rose');
     while(previewElements.length > 0){
-        previewElements[0].parentNode.removeChild(previewElements[0])
+        if(previewElements[0].parentNode)
+          previewElements[0].parentNode.removeChild(previewElements[0])
     }
   }
 
-  destroyElement(el) {
+  destroyElement(el: any) {
     const parent = el.parentElement
     parent.removeChild(el)
   }
 
-  private onDragInitialRose(el) {
+  private onDragInitialRose(el: any) {
     this.dragging = true
     this.draggedRose = el.srcElement
 
@@ -419,12 +429,12 @@ export default class BoquetMaker extends Vue {
     return newElement
   }
 
-  private transformToDragged(el) {
+  private transformToDragged(el: any) {
     el.setAttribute("class", "dragged-rose")
     el.setAttribute("opacity", "0.5")
   }
 
-  private initDrag(el, onPress, onDragEnd) {
+  private initDrag(el: any, onPress: any, onDragEnd: any) {
     Draggable.create(el, {
       type:"x,y",
       bounds:"#hex-grid",
@@ -460,7 +470,7 @@ export default class BoquetMaker extends Vue {
 
   sourceRoseX(index: number): number {
     const svg = this.$refs["hex-grid"] as HTMLElement
-    return index * (svg ? svg.clientWidth : 900) / this.roses.length + 20
+    return index * (svg ? svg.clientWidth : 900) / this.roses.length + 100
   }
 
 
@@ -478,34 +488,34 @@ export default class BoquetMaker extends Vue {
     svg.selectAll(".dropped-rose").remove()
 
 
-    svg.selectAll("text")
-      .data(grid as any[])
-      .enter().append("text")
-      .text(d => d.x + "," + d.y)
-      .attr("transform", d => {
-        const { x, y } = d.toPoint()
-        return "translate(" + (x+20+this.xOffset) + "," + (y+20+this.yOffset) + ")"
-      })
+    // svg.selectAll("text")
+    //   .data(grid as any[])
+    //   .enter().append("text")
+    //   .text(d => d.x + "," + d.y)
+    //   .attr("transform", d => {
+    //     const { x, y } = d.toPoint()
+    //     return "translate(" + (x+20+this.xOffset) + "," + (y+20+this.yOffset) + ")"
+    //   })
       
-    svg.selectAll("polygon")
-      .data(grid as any[])
-      .enter().append("polygon")
-      .attr("points", d => corners.map(({ x, y }) => `${x},${y}`).join(' '))
-      .attr("transform", d => {
-        const { x, y } = d.toPoint()
-        return "translate(" + (x+this.xOffset) + "," + (y+this.yOffset) + ")"
-      })
-      .attr("fill", "rgba(0,0,0,0.0)")
-      .attr("stroke", "black")
-      .attr("stroke-width", d => 1)
-      .filter((d) => d.rose !== undefined)
+    // svg.selectAll("polygon")
+    //   .data(grid as any[])
+    //   .enter().append("polygon")
+    //   .attr("points", d => corners.map(({ x, y }) => `${x},${y}`).join(' '))
+    //   .attr("transform", d => {
+    //     const { x, y } = d.toPoint()
+    //     return "translate(" + (x+this.xOffset) + "," + (y+this.yOffset) + ")"
+    //   })
+    //   .attr("fill", "rgba(0,0,0,0.0)")
+    //   .attr("stroke", "black")
+    //   .attr("stroke-width", d => 1)
+    //   .filter((d) => d.rose !== undefined)
 
-      console.log('dropped roses', svg.select(".dropped-roses").selectAll("image")  
-      .data(grid as any[])
-      .enter()
-        .filter(d => {
-          return !!d.rose
-        }), grid)
+    //   console.log('dropped roses', svg.select(".dropped-roses").selectAll("image")  
+    //   .data(grid as any[])
+    //   .enter()
+    //     .filter(d => {
+    //       return !!d.rose
+    //     }), grid)
 
     svg.select(".dropped-roses").selectAll(".dropped-rose")  
       .data(grid as any[])
@@ -515,7 +525,7 @@ export default class BoquetMaker extends Vue {
         }).append("image")
       .attr("href", d => d.rose.asset)
       .attr("roseId", d => d.rose.id)
-      .attr("width", d => "64px")
+      .attr("width", d => "80px")
       .attr("class", d => "dropped-rose rose")
       .attr("transform", d => {
         const { x, y } = d.toPoint()
@@ -532,7 +542,7 @@ export default class BoquetMaker extends Vue {
       })
   }
 
-  private onDragDroppedRose(el) {
+  private onDragDroppedRose(el: any) {
     console.log('yo')
     this.insideDropzone = true
     this.dragging = true
@@ -552,7 +562,8 @@ export default class BoquetMaker extends Vue {
     this.appendPreviewToGrid(this.draggedRose, grid, this.dropX, this.dropY)
   }
 
-  onMoveDroppedRose(el) {
+// eslint-disable-next-line
+  onMoveDroppedRose() {
     if(Draggable.hitTest(this.draggedRose, '.dropzone', 2)) {
       console.log('overlap')
     }
